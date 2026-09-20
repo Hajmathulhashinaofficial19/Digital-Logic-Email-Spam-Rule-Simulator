@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Digital Logic Email Spam Simulator</title>
+<style>
+  :root {
+    --bg:#0f1220; --panel:#171b2e; --panel2:#1e2338; --border:#2b3153;
+    --text:#e8eaf6; --muted:#9aa0c3; --accent:#6c8cff; --spam:#ff5d7a; --ham:#3ddc97;
+    box-sizing:border-box;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg:#f4f5fb; --panel:#ffffff; --panel2:#eef0fa; --border:#dfe2f3;
+      --text:#1a1d2e; --muted:#5b6088; --accent:#3654d6; --spam:#d63a58; --ham:#0f9d63;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#f4f5fb; --panel:#ffffff; --panel2:#eef0fa; --border:#dfe2f3;
+    --text:#1a1d2e; --muted:#5b6088; --accent:#3654d6; --spam:#d63a58; --ham:#0f9d63;
+  }
+  * { box-sizing:border-box; }
+  html,body { height:100%; }
+  body {
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding: calc(20px + env(safe-area-inset-top,0px)) 20px calc(20px + env(safe-area-inset-bottom,0px));
+  }
+  .wrap { max-width:1000px; margin:0 auto; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:0.9rem; margin-bottom:20px; }
+  .grid { display:grid; grid-template-columns: 1.1fr 1fr; gap:16px; }
+  @media (max-width:760px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:18px; margin-bottom:16px;
+  }
+  .card h2 { font-size:1rem; margin:0 0 12px; color:var(--accent); }
+  .toggles { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+  .toggle {
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--panel2); border:1px solid var(--border); border-radius:10px;
+    padding:10px 12px; cursor:pointer; user-select:none;
+  }
+  .toggle .label { font-size:0.85rem; }
+  .toggle .label b { display:block; font-size:0.75rem; color:var(--muted); font-weight:500; }
+  .switch { width:40px; height:22px; border-radius:12px; background:var(--border); position:relative; flex:none; transition:.15s; }
+  .switch::after { content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:var(--panel); transition:.15s; }
+  .toggle.on .switch { background:var(--accent); }
+  .toggle.on .switch::after { left:20px; }
+  .verdict {
+    text-align:center; padding:22px 10px; border-radius:12px; font-weight:700;
+    font-size:1.6rem; letter-spacing:0.5px; margin-bottom:14px; transition:.2s;
+  }
+  .verdict.ham { background:color-mix(in srgb, var(--ham) 18%, transparent); color:var(--ham); }
+  .verdict.spam { background:color-mix(in srgb, var(--spam) 18%, transparent); color:var(--spam); }
+  .terms { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+  .term {
+    font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.85rem;
+    padding:5px 10px; border-radius:8px; border:1px solid var(--border); color:var(--muted);
+  }
+  .term.fired { border-color:var(--accent); color:var(--accent); background:color-mix(in srgb, var(--accent) 12%, transparent); font-weight:600; }
+  table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+  th, td { padding:6px 8px; text-align:center; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:600; }
+  tr.current { background:color-mix(in srgb, var(--accent) 14%, transparent); }
+  .f1 { color:var(--spam); font-weight:700; }
+  .f0 { color:var(--muted); }
+  .scroll { max-height:340px; overflow-y:auto; }
+  .testrow { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); font-size:0.85rem; gap:8px;}
+  .testrow:last-child { border-bottom:none; }
+  .badge { font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius:6px; flex:none; }
+  .badge.pass { color:var(--ham); background:color-mix(in srgb, var(--ham) 18%, transparent); }
+  .badge.fail { color:var(--spam); background:color-mix(in srgb, var(--spam) 18%, transparent); }
+  .meta { color:var(--muted); font-size:0.72rem; }
+  .expr { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.95rem; background:var(--panel2); padding:10px 12px; border-radius:8px; border:1px solid var(--border); }
+  .summary { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px; font-size:0.85rem; color:var(--muted); }
+  .summary b { color:var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📧 Digital Logic Email Spam Rule Simulator</h1>
+  <div class="sub">F = D + AB + AC + BC &nbsp;·&nbsp; toggle the indicators to see the circuit decide</div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Inputs (indicators)</h2>
+        <div class="toggles" id="toggles"></div>
+      </div>
+
+      <div class="card">
+        <h2>Output</h2>
+        <div class="verdict ham" id="verdict">HAM</div>
+        <div class="expr" id="exprline">F = D + AB + AC + BC</div>
+        <div class="terms" id="terms"></div>
+      </div>
+
+      <div class="card">
+        <h2>Truth table (current row highlighted)</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>A</th><th>B</th><th>C</th><th>D</th><th>F</th></tr></thead>
+            <tbody id="ttbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Test suite (10 normal + 5 edge cases)</h2>
+        <div class="summary" id="summary"></div>
+        <div class="scroll" id="testlist"></div>
+      </div>
+
+      <div class="card">
+        <h2>About this model</h2>
+        <div class="meta">
+          A = unverified sender · B = spam keywords · C = suspicious link · D = suspicious attachment.<br><br>
+          Design rule: a dangerous attachment (D) is spam on its own; a suspicious link (C) only matters
+          combined with an unverified sender or spam wording (A or B); an unverified sender using spam
+          wording (A·B) is spam even with no link or attachment.<br><br>
+          Minimizing the raw expression D + C(A+B) + AB via Quine–McCluskey yields the equivalent,
+          already-minimal form <b>F = D + AB + AC + BC</b> — a dangerous-attachment override OR-ed with a
+          majority (2-of-3) vote over {A, B, C}.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const VARS = ["A","B","C","D"];
+const LABELS = {
+  A: ["Unverified sender", "Sender domain missing/untrusted"],
+  B: ["Spam keywords", "Body/subject has spam phrases"],
+  C: ["Suspicious link", "Shortened or raw-IP link"],
+  D: ["Suspicious attachment", ".exe/.scr/.bat etc."]
+};
+
+function evalF(a,b,c,d){ return (d || (a&&b) || (c&&(a||b))) ? 1 : 0; }
+
+function buildTruthTable(){
+  const rows = [];
+  for (let i=0;i<16;i++){
+    const a=(i>>3)&1,b=(i>>2)&1,c=(i>>1)&1,d=i&1;
+    rows.push({a,b,c,d,f:evalF(a,b,c,d)});
+  }
+  return rows;
+}
+const TT = buildTruthTable();
+
+let state = {A:0,B:0,C:0,D:0};
+
+function renderToggles(){
+  const el = document.getElementById("toggles");
+  el.innerHTML = "";
+  VARS.forEach(v=>{
+    const div = document.createElement("div");
+    div.className = "toggle" + (state[v]?" on":"");
+    div.innerHTML = `<div class="label"><b>${v}</b>${LABELS[v][0]}</div><div class="switch"></div>`;
+    div.onclick = ()=>{ state[v]=state[v]?0:1; render(); };
+    el.appendChild(div);
+  });
+}
+
+function render(){
+  renderToggles();
+  const {A,B,C,D} = state;
+  const f = evalF(A,B,C,D);
+  const verdictEl = document.getElementById("verdict");
+  verdictEl.textContent = f ? "SPAM" : "HAM";
+  verdictEl.className = "verdict " + (f ? "spam":"ham");
+
+  const terms = [
+    {name:"D", fired: D===1},
+    {name:"A·B", fired: A===1 && B===1},
+    {name:"A·C", fired: A===1 && C===1},
+    {name:"B·C", fired: B===1 && C===1},
+  ];
+  document.getElementById("terms").innerHTML = terms.map(t=>
+    `<span class="term ${t.fired?'fired':''}">${t.name}${t.fired?' ✓':''}</span>`
+  ).join("");
+
+  const body = document.getElementById("ttbody");
+  body.innerHTML = TT.map(r=>{
+    const isCurrent = r.a===A && r.b===B && r.c===C && r.d===D;
+    return `<tr class="${isCurrent?'current':''}"><td>${r.a}</td><td>${r.b}</td><td>${r.c}</td><td>${r.d}</td><td class="${r.f?'f1':'f0'}">${r.f}</td></tr>`;
+  }).join("");
+}
+
+// --- test suite (mirrors data/test_emails.json + indicator logic) ---
+const TESTS = [
+  {id:"N1",type:"normal",A:0,B:0,C:0,D:0,expected:"HAM"},
+  {id:"N2",type:"normal",A:1,B:1,C:1,D:0,expected:"SPAM"},
+  {id:"N3",type:"normal",A:0,B:0,C:0,D:0,expected:"HAM"},
+  {id:"N4",type:"normal",A:1,B:1,C:0,D:0,expected:"SPAM"},
+  {id:"N5",type:"normal",A:0,B:0,C:0,D:0,expected:"HAM"},
+  {id:"N6",type:"normal",A:1,B:0,C:0,D:1,expected:"SPAM"},
+  {id:"N7",type:"normal",A:0,B:0,C:0,D:0,expected:"HAM"},
+  {id:"N8",type:"normal",A:1,B:1,C:0,D:0,expected:"SPAM"},
+  {id:"N9",type:"normal",A:0,B:0,C:0,D:0,expected:"HAM"},
+  {id:"N10",type:"normal",A:1,B:0,C:1,D:0,expected:"SPAM"},
+  {id:"E1",type:"edge",A:1,B:0,C:0,D:0,expected:"HAM"},
+  {id:"E2",type:"edge",A:0,B:0,C:0,D:1,expected:"SPAM"},
+  {id:"E3",type:"edge",A:0,B:0,C:0,D:0,expected:"HAM"},
+  {id:"E4",type:"edge",A:0,B:1,C:0,D:0,expected:"HAM"},
+  {id:"E5",type:"edge",A:1,B:0,C:0,D:0,expected:"HAM"},
+];
+
+function renderTests(){
+  let passCount = 0;
+  const list = TESTS.map(t=>{
+    const predicted = evalF(t.A,t.B,t.C,t.D) ? "SPAM":"HAM";
+    const pass = predicted === t.expected;
+    if (pass) passCount++;
+    return `<div class="testrow">
+      <span><b>${t.id}</b> <span class="meta">(${t.type}) A${t.A}B${t.B}C${t.C}D${t.D} → ${predicted}</span></span>
+      <span class="badge ${pass?'pass':'fail'}">${pass?'PASS':'FAIL'}</span>
+    </div>`;
+  }).join("");
+  document.getElementById("testlist").innerHTML = list;
+  document.getElementById("summary").innerHTML =
+    `<span><b>${passCount}/${TESTS.length}</b> passed</span>
+     <span><b>${TESTS.filter(t=>t.type==='normal').length}</b> normal cases</span>
+     <span><b>${TESTS.filter(t=>t.type==='edge').length}</b> edge cases</span>`;
+}
+
+render();
+renderTests();
+</script>
+</body>
+</html>
